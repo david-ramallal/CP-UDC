@@ -7,7 +7,7 @@ int main(int argc, char *argv[])
 {
     int i, done = 0, n, count;
     double PI25DT = 3.141592653589793238462643;
-    double pi, x, y, z;
+    double pi, x, y, z, recvPi;
     int numprocs, rank, j, k;
 
     MPI_Status status;
@@ -48,11 +48,12 @@ int main(int argc, char *argv[])
         }
         pi = ((double) count/(double) n)*4.0;
 
-        if(rank != 0)
+        if(rank > 0)
             MPI_Send(&pi, 1, MPI_DOUBLE, 0, 0, MPI_COMM_WORLD);       
         else{
             for(k = 1; k < numprocs; k++){
-                MPI_Recv(&pi, 1, MPI_DOUBLE, 0, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
+                MPI_Recv(&recvPi, 1, MPI_DOUBLE, MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
+                pi += recvPi;
             }
             printf("pi is approx. %.16f, Error is %.16f\n", pi, fabs(pi - PI25DT));
         }
