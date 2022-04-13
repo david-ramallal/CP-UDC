@@ -3,34 +3,62 @@
 #include <math.h>
 #include <mpi.h>
 
-int MPI_FlattreeColective(void *buff, int count, MPI_Datatype datatype, int root, MPI_Comm comm){
+// int MPI_FlattreeColective(void *buff, void *recvbuff, int count, MPI_Datatype datatype, int root, MPI_Comm comm){
 
-    int errorNum, i, numprocs, rank;
+//     int errorNum, i, numprocs, rank;
+//     MPI_Status status;
+//     MPI_Comm_size(MPI_COMM_WORLD, &numprocs);
+//     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+
+//     if(rank != root){
+//         errorNum = MPI_Send(&buff, count, datatype, root, 0, comm);
+//         if(errorNum != MPI_SUCCESS)
+//             return errorNum;       
+//     }else{
+//         for(i = 0; i < numprocs; i++){
+//             if(i != root){
+//                 errorNum = MPI_Recv(&recvbuff, 1, MPI_DOUBLE, MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
+//                 buff += recvbuff;
+//                 if(errorNum != MPI_SUCCESS)
+//                     return errorNum;
+//             }
+            
+//         }
+//     }
+
+//     return MPI_SUCCESS;
+             
+// }
+
+int MPI_BinomialBcast(void *buff, int count, MPI_Datatype datatype, int root, MPI_Comm comm){
+    
+    int errorNum, i, numprocs, rank, parent, child;
     MPI_Status status;
     MPI_Comm_size(MPI_COMM_WORLD, &numprocs);
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 
-    if(rank == root){
-        for(i = 0; i < numprocs; i++){
-            if(i != root){
-                errorNum = MPI_Send(buff, count, datatype, i, 0, comm);
+    for(i = 1; i <= ceil(log2(numprocs)); i++){
+        if(rank < pow(2, i-1)){
+            child = rank + pow(2, i-1);
+            if(child < numprocs){
+                errorNum = MPI_Send(buff, count, datatype, child, 0, comm);
+                if(errorNum != MPI_SUCCESS)
+                    return errorNum;
+            }
+        }else{
+            if(rank < pow(2,i)){
+                parent = rank - pow(2, i-1);
+                errorNum = MPI_Recv(buff, count, datatype, parent, 0, comm, &status);
                 if(errorNum != MPI_SUCCESS)
                     return errorNum;
             }
         }
-    }else{
-        errorNum = MPI_Recv(buff, count, datatype, root, 0, comm, &status);
-        if(errorNum != MPI_SUCCESS)
-            return errorNum;
     }
-
     return MPI_SUCCESS;
-             
 }
 
-int MPI_BinomialColective(void *buff, int count, MPI_Datatype datatype, int root, MPI_Comm comm){
-
-
+int MPI_BinomialColective(void *buff, int count, MPI_Datatype datatype, MPI_Comm comm){
+    MPI_BinomialBcast(buff, count, datatype, 0, comm);
 }
 
 
@@ -40,8 +68,6 @@ int main(int argc, char *argv[])
     double PI25DT = 3.141592653589793238462643;
     double pi, x, y, z, recvPi;
     int numprocs, rank;
-
-    //MPI_Status status;
 
     MPI_Init(&argc, &argv);
 
@@ -56,7 +82,9 @@ int main(int argc, char *argv[])
             printf("Enter the number of points: (0 quits) \n");
             scanf("%d",&n);
         }
-        //MPI_Bcast(&n, 1, MPI_INT, 0, MPI_COMM_WORLD);        
+        //MPI_Bcast(&n, 1, MPI_INT, 0, MPI_COMM_WORLD);    
+        MPI_BinomialColective(&n, 1, MPI_INT, MPI_COMM_WORLD);
+
     
         if (n == 0) break;
 
@@ -76,7 +104,7 @@ int main(int argc, char *argv[])
         }
         pi = ((double) count/(double) n)*4.0;
 
-        //MPI_Reduce(&pi, &recvPi, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
+        MPI_Reduce(&pi, &recvPi, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
 
         if(rank == 0)
             printf("pi is approx. %.16f, Error is %.16f\n", recvPi, fabs(recvPi - PI25DT));
