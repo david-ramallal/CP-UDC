@@ -6,19 +6,23 @@
 int MPI_FlattreeColective(void *buff, void *recvbuff, int count, MPI_Datatype datatype, int root, MPI_Comm comm){
 
     int errorNum, i, numprocs, rank;
+    double *buffInt, *recvbuffInt;
     MPI_Status status;
     MPI_Comm_size(MPI_COMM_WORLD, &numprocs);
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 
+    buffInt = (double *) buff;
+    recvbuffInt = (double *) recvbuff;
+
     if(rank != root){
-        errorNum = MPI_Send(buff, count, datatype, root, 0, comm);
+        errorNum = MPI_Send(buffInt, count, datatype, root, 0, comm);
         if(errorNum != MPI_SUCCESS)
             return errorNum;       
     }else{
         for(i = 0; i < numprocs; i++){
             if(i != root){
-                errorNum = MPI_Recv(recvbuff, 1, MPI_DOUBLE, MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
-                buff = buff + recvbuff;
+                errorNum = MPI_Recv(recvbuffInt, 1, MPI_DOUBLE, MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
+                *buffInt += *recvbuffInt;
                 if(errorNum != MPI_SUCCESS)
                     return errorNum;
             }
@@ -81,8 +85,8 @@ int main(int argc, char *argv[])
         if(rank == 0){
             printf("Enter the number of points: (0 quits) \n");
             scanf("%d",&n);
-        }
-        //MPI_Bcast(&n, 1, MPI_INT, 0, MPI_COMM_WORLD);    
+        } 
+
         MPI_BinomialColective(&n, 1, MPI_INT, MPI_COMM_WORLD);
 
     
@@ -104,11 +108,10 @@ int main(int argc, char *argv[])
         }
         pi = ((double) count/(double) n)*4.0;
 
-        //MPI_Reduce(&pi, &recvPi, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
         MPI_FlattreeColective(&pi, &recvPi, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
 
         if(rank == 0)
-            printf("pi is approx. %.16f, Error is %.16f\n", recvPi, fabs(recvPi - PI25DT));
+            printf("pi is approx. %.16f, Error is %.16f\n", pi, fabs(pi - PI25DT));
 
     }
 
