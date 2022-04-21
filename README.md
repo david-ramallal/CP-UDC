@@ -9,6 +9,6 @@
 
 ### Paralelismo
 
-#### *P1 - Estimation of PI by the Montecarlo method*          -> 
-#### *P2 - MPI collectives in the estimation of PI*            ->
-#### *P3 - ###############################################*    ->
+#### *P1 - Estimation of PI by the Montecarlo method*          -> 0'25/0'25
+#### *P2 - MPI collectives in the estimation of PI*            -> 0'5/0'5
+#### *P3 - Domain decomposition: matrix-vector product*    -> -/0'75
