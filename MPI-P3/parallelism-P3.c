@@ -3,17 +3,17 @@
 #include <sys/time.h>
 #include <mpi.h>
 
-//#define DEBUG 1
+#define DEBUG 1
 
 #define N 1024
 
 int main(int argc, char *argv[] ) {
 
-  int i, j, numprocs, rank, *distribution, m, remainder, n, *disp, k;
+  int i, j, numprocs, rank, *distribution, m, remainder = 0, n, *disp, k;
   float matrix[N][N], *matrixVector;
   float vector[N];
-  float result[N], tmpResult[N];
-  struct timeval  tv1, tv2;
+  float result[N];
+  struct timeval tv1, tv2;
   float *auxMtrx, *auxRslt;
 
   MPI_Init(&argc, &argv);
@@ -30,19 +30,18 @@ int main(int argc, char *argv[] ) {
         matrix[i][j] = i+j;
       }
     }
-  }  
 
-  k=0;
-  for(i = 0; i < N; i++){
-    for(j = 0; j < N; j++){
-      matrixVector[k] = matrix[i][j];
-      k++;
+    k=0;
+    for(i = 0; i < N; i++){
+      for(j = 0; j < N; j++){
+        matrixVector[k] = matrix[i][j];
+        k++;
+      }
     }
-  }
+  }    
 
   distribution = malloc(sizeof(int)*numprocs);
   disp = malloc(sizeof(int)*numprocs);
-  auxMtrx = malloc (sizeof(float)*N*N);
   auxRslt = malloc (sizeof(float)*N);
 
   MPI_Bcast(&vector, N, MPI_FLOAT, 0, MPI_COMM_WORLD);
@@ -55,7 +54,6 @@ int main(int argc, char *argv[] ) {
     }
   }else{
     n = N;
-    remainder = 0;
     while(n % numprocs != 0){
       remainder++;
       n--;
@@ -69,7 +67,15 @@ int main(int argc, char *argv[] ) {
     }
   }  
 
-  MPI_Scatterv(&matrixVector, distribution, disp, MPI_FLOAT, auxMtrx, N*N, MPI_FLOAT, 0, MPI_COMM_WORLD);
+  auxMtrx = malloc (sizeof(float)*(m + remainder)*N);
+
+  if(rank == 0){
+    MPI_Scatterv(matrixVector, distribution, disp, MPI_FLOAT, auxMtrx, (m+remainder)*N, MPI_FLOAT, 0, MPI_COMM_WORLD);
+  }else
+    MPI_Scatterv(matrixVector, distribution, disp, MPI_FLOAT, auxMtrx, m*N, MPI_FLOAT, 0, MPI_COMM_WORLD);
+
+
+  //MPI_Scatterv(matrixVector, distribution, disp, MPI_FLOAT, auxMtrx, N*N, MPI_FLOAT, 0, MPI_COMM_WORLD);
 
   gettimeofday(&tv1, NULL);
 
@@ -80,29 +86,51 @@ int main(int argc, char *argv[] ) {
   //   }
   // }  
 
-  for(i=rank + 1;i<N;i+=numprocs) {
-    auxRslt[i]=0;
-    for(j=0;j<N;j++) {
-      auxRslt[i] += matrixVector[i*N + j]*vector[j];
+  if(rank == 0){
+    for(i=0;i<(m + remainder);i++) {
+      auxRslt[i]=0;
+      for(j=0;j<N;j++) {
+        auxRslt[i] += auxMtrx[i*N + j]*vector[j];
+      }
     }
-  }  
+  }
+  else{
+    for(i=0;i<m;i++) {
+      auxRslt[i]=0;
+      for(j=0;j<N;j++) {
+        auxRslt[i] += auxMtrx[i*N + j]*vector[j];
+      }
+    }
+  }
 
   gettimeofday(&tv2, NULL);
 
-  //MPI_Barrier(MPI_COMM_WORLD);
+  if(rank == 0){
+    MPI_Gatherv(auxRslt, m+remainder, MPI_FLOAT, &result, distribution, disp, MPI_FLOAT, 0, MPI_COMM_WORLD);
+  }else
+    MPI_Gatherv(auxRslt, m, MPI_FLOAT, &result, distribution, disp, MPI_FLOAT, 0, MPI_COMM_WORLD);
 
-  MPI_Gatherv(&auxRslt, N, MPI_FLOAT, &result, distribution, disp, MPI_FLOAT, 0, MPI_COMM_WORLD);
+  //MPI_Gatherv(auxRslt, N, MPI_FLOAT, &result, distribution, disp, MPI_FLOAT, 0, MPI_COMM_WORLD);
     
   int microseconds = (tv2.tv_usec - tv1.tv_usec)+ 1000000 * (tv2.tv_sec - tv1.tv_sec);
 
-  /*Display result */
-  if (rank == 0){
-    for(i=0;i<N;i++) {
-      printf(" %f \t ",result[i]);
+  /*
+  To display the result -> DEBUG = 1
+  To display the times -> DEBUG = 0
+  */
+
+  if(DEBUG){
+    if(rank == 0){
+      for(i=0;i<N;i++) {
+        printf("%.1f\t",result[i]);
+      }
     }
-  } else {
-    printf ("Time (seconds) = %lf\n", (double) microseconds/1E6);
-  }    
+  }else{
+    MPI_Barrier(MPI_COMM_WORLD);
+    printf("Computation time (seconds) = %lf (process %d)\n", (double) microseconds/1E6, rank);
+  }  
+
+  MPI_Finalize(); 
 
   return 0;
 }
