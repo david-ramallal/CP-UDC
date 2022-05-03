@@ -9,7 +9,7 @@
 
 int main(int argc, char *argv[] ) {
 
-  int i, j, numprocs, rank, *distribution, m, remainder = 0, n, *disp, k;
+  int i, j, numprocs, rank, *distribution, m, remainder = 0, n, *disp, *reception, *dispRcv, k;
   float matrix[N][N], *matrixVector;
   float vector[N];
   float result[N];
@@ -41,7 +41,9 @@ int main(int argc, char *argv[] ) {
   }    
 
   distribution = malloc(sizeof(int)*numprocs);
+  reception = malloc(sizeof(int)*numprocs);
   disp = malloc(sizeof(int)*numprocs);
+  dispRcv = malloc(sizeof(int)*numprocs);
   auxRslt = malloc (sizeof(float)*N);
 
   MPI_Bcast(&vector, N, MPI_FLOAT, 0, MPI_COMM_WORLD);
@@ -103,12 +105,26 @@ int main(int argc, char *argv[] ) {
     }
   }
 
+  if(N % numprocs == 0){
+    for(i = 0; i < numprocs; i++){
+      reception[i] = m;
+      dispRcv[i] = m*i;
+    }
+  }else{
+    reception[0] = (m + remainder);
+    dispRcv[0] = 0;
+    for(i = 1; i < numprocs; i++){
+      reception[i] = m;
+      dispRcv[i] = m*i;
+    }
+  }
+
   gettimeofday(&tv2, NULL);
 
   if(rank == 0){
-    MPI_Gatherv(auxRslt, m+remainder, MPI_FLOAT, &result, distribution, disp, MPI_FLOAT, 0, MPI_COMM_WORLD);
+    MPI_Gatherv(auxRslt, m+remainder, MPI_FLOAT, &result, reception, dispRcv, MPI_FLOAT, 0, MPI_COMM_WORLD);
   }else
-    MPI_Gatherv(auxRslt, m, MPI_FLOAT, &result, distribution, disp, MPI_FLOAT, 0, MPI_COMM_WORLD);
+    MPI_Gatherv(auxRslt, m, MPI_FLOAT, &result, reception, dispRcv, MPI_FLOAT, 0, MPI_COMM_WORLD);
 
   //MPI_Gatherv(auxRslt, N, MPI_FLOAT, &result, distribution, disp, MPI_FLOAT, 0, MPI_COMM_WORLD);
     
@@ -122,7 +138,7 @@ int main(int argc, char *argv[] ) {
   if(DEBUG){
     if(rank == 0){
       for(i=0;i<N;i++) {
-        printf("%.1f\t",result[i]);
+        printf(" %f \t ",result[i]);
       }
     }
   }else{
