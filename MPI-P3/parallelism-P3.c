@@ -65,9 +65,9 @@ int main(int argc, char *argv[] ) {
     disp[0] = 0;
     for(i = 1; i < numprocs; i++){
       distribution[i] = m*N;
-      disp[i] = m*N*i;
+      disp[i] = (m+remainder)*N + m*N*(i-1);
     }
-  }  
+  }
 
   auxMtrx = malloc (sizeof(float)*(m + remainder)*N);
 
@@ -115,7 +115,7 @@ int main(int argc, char *argv[] ) {
     dispRcv[0] = 0;
     for(i = 1; i < numprocs; i++){
       reception[i] = m;
-      dispRcv[i] = m*i;
+      dispRcv[i] = (m+remainder) + m*(i-1);
     }
   }
 
