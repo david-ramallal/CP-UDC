@@ -3,7 +3,7 @@
 #include <sys/time.h>
 #include <mpi.h>
 
-#define DEBUG 1
+#define DEBUG 0
 
 #define N 1024
 
@@ -13,7 +13,7 @@ int main(int argc, char *argv[] ) {
   float matrix[N][N], *matrixVector;
   float vector[N];
   float result[N];
-  struct timeval tv1, tv2;
+  struct timeval tv1, tv2, bcast1, bcast2, gath1, gath2, scatt1, scatt2;
   float *auxMtrx, *auxRslt;
 
   MPI_Init(&argc, &argv);
@@ -46,7 +46,11 @@ int main(int argc, char *argv[] ) {
   dispRcv = malloc(sizeof(int)*numprocs);
   auxRslt = malloc (sizeof(float)*N);
 
+  gettimeofday(&bcast1, NULL);
+
   MPI_Bcast(&vector, N, MPI_FLOAT, 0, MPI_COMM_WORLD);
+
+  gettimeofday(&bcast2, NULL);
 
   if(N % numprocs == 0){
     m = N / numprocs;
@@ -71,22 +75,17 @@ int main(int argc, char *argv[] ) {
 
   auxMtrx = malloc (sizeof(float)*(m + remainder)*N);
 
+  gettimeofday(&scatt1, NULL);
+
   if(rank == 0){
     MPI_Scatterv(matrixVector, distribution, disp, MPI_FLOAT, auxMtrx, (m+remainder)*N, MPI_FLOAT, 0, MPI_COMM_WORLD);
   }else
     MPI_Scatterv(matrixVector, distribution, disp, MPI_FLOAT, auxMtrx, m*N, MPI_FLOAT, 0, MPI_COMM_WORLD);
 
+  gettimeofday(&scatt2, NULL);
 
-  //MPI_Scatterv(matrixVector, distribution, disp, MPI_FLOAT, auxMtrx, N*N, MPI_FLOAT, 0, MPI_COMM_WORLD);
 
   gettimeofday(&tv1, NULL);
-
-  // for(i=0;i<N;i++) {
-  //   result[i]=0;
-  //   for(j=0;j<N;j++) {
-  //     result[i] += matrix[i][j]*vector[j];
-  //   }
-  // }  
 
   if(rank == 0){
     for(i=0;i<(m + remainder);i++) {
@@ -121,14 +120,22 @@ int main(int argc, char *argv[] ) {
 
   gettimeofday(&tv2, NULL);
 
+  gettimeofday(&gath1, NULL);
+
   if(rank == 0){
     MPI_Gatherv(auxRslt, m+remainder, MPI_FLOAT, &result, reception, dispRcv, MPI_FLOAT, 0, MPI_COMM_WORLD);
   }else
     MPI_Gatherv(auxRslt, m, MPI_FLOAT, &result, reception, dispRcv, MPI_FLOAT, 0, MPI_COMM_WORLD);
 
-  //MPI_Gatherv(auxRslt, N, MPI_FLOAT, &result, distribution, disp, MPI_FLOAT, 0, MPI_COMM_WORLD);
+  gettimeofday(&gath2, NULL);
     
   int microseconds = (tv2.tv_usec - tv1.tv_usec)+ 1000000 * (tv2.tv_sec - tv1.tv_sec);
+
+  int msBcast = (bcast2.tv_usec - bcast1.tv_usec)+ 1000000 * (bcast2.tv_sec - bcast1.tv_sec);
+  int msScatt = (scatt2.tv_usec - scatt1.tv_usec)+ 1000000 * (scatt2.tv_sec - scatt1.tv_sec);
+  int msGath = (gath2.tv_usec - gath1.tv_usec)+ 1000000 * (gath2.tv_sec - gath1.tv_sec);
+
+  int commTime = msBcast + msScatt + msGath;
 
   /*
   To display the result -> DEBUG = 1
@@ -144,6 +151,7 @@ int main(int argc, char *argv[] ) {
   }else{
     MPI_Barrier(MPI_COMM_WORLD);
     printf("Computation time (seconds) = %lf (process %d)\n", (double) microseconds/1E6, rank);
+    printf("Communication time (seconds) = %lf (process %d)\n", (double) commTime/1E6, rank);
   }  
 
   MPI_Finalize(); 
